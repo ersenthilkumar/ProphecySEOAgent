@@ -1,0 +1,16 @@
+anthropic>=0.40.0
+openai>=1.0.0
+tweepy>=4.14.0
+linkedin-api>=2.3.0
+praw>=7.7.0
+apscheduler>=3.10.4
+python-dotenv>=1.0.0
+pydantic>=2.0.0
+pydantic-settings>=2.0.0
+requests>=2.31.0
+Pillow>=10.0.0
+httpx>=0.26.0
+tenacity>=8.2.0
+rich>=13.7.0
+pytz>=2024.1
+aiofiles>=23.0.0
