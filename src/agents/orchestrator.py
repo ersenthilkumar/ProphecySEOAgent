@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import re
 import time
 from datetime import datetime
 from pathlib import Path
@@ -32,7 +33,11 @@ class Orchestrator:
     def _save_blog(self, post: GeneratedPost) -> str | None:
         if not post.blog_content:
             return None
-        safe_title = post.blog_title.replace(" ", "_")[:50] if post.blog_title else "blog"
+        raw = post.blog_title if post.blog_title else "blog"
+        # Strip URLs, then replace anything that isn't alphanumeric/hyphen with _
+        raw = re.sub(r'https?://\S+', '', raw)
+        safe_title = re.sub(r'[^\w\-]', '_', raw).strip('_')[:50]
+        safe_title = re.sub(r'_+', '_', safe_title) or "blog"
         timestamp = int(time.time())
         filename = f"{safe_title}_{timestamp}.md"
         path = os.path.join(self.settings.blogs_dir, filename)
@@ -71,7 +76,7 @@ class Orchestrator:
         blog_path = self._save_blog(post)
         if blog_path:
             # Append blog file path as a note in LinkedIn content
-            post.linkedin_content += f"\n\n📖 Full article saved: {os.path.basename(blog_path)}"
+            post.linkedin_content += f"\n\n[Full article: {os.path.basename(blog_path)}]"
 
         # 5. Post to all configured social platforms
         results = self.social_manager.publish(post)
