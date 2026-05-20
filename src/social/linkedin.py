@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import mimetypes
 import os
+import time
 
 import requests
 
@@ -118,6 +119,33 @@ class LinkedInPlatform(BasePlatform):
 
     # ── Post creation ─────────────────────────────────────────────────────────
 
+    def _do_post(self, payload: dict) -> str:
+        """Send the ugcPost request with automatic retry on 429 / 5xx."""
+        delays = [60, 120, 300]  # seconds between retries (1m, 2m, 5m)
+        for attempt, delay in enumerate(delays, 1):
+            resp = requests.post(
+                f"{LI_API}/ugcPosts",
+                json=payload,
+                headers=self._headers(),
+                timeout=30,
+            )
+            if resp.status_code == 429:
+                retry_after = int(resp.headers.get("Retry-After", delay))
+                logger.warning(
+                    f"LinkedIn 429 rate-limited — waiting {retry_after}s "
+                    f"(attempt {attempt}/{len(delays)})"
+                )
+                time.sleep(retry_after)
+                continue
+            if resp.status_code >= 500 and attempt < len(delays):
+                logger.warning(f"LinkedIn {resp.status_code} — retrying in {delay}s")
+                time.sleep(delay)
+                continue
+            resp.raise_for_status()
+            return resp.headers.get("x-restli-id", "n/a")
+        resp.raise_for_status()  # final attempt already raised above; belt-and-suspenders
+        return "n/a"
+
     def post(self, generated: GeneratedPost) -> bool:
         if not self.is_configured():
             logger.warning("LinkedIn not configured – skipping")
@@ -153,14 +181,8 @@ class LinkedInPlatform(BasePlatform):
             }
             logger.info(f"LinkedIn: posting as {self._author_urn} [{self.name}]")
 
-            resp = requests.post(
-                f"{LI_API}/ugcPosts",
-                json=payload,
-                headers=self._headers(),
-                timeout=30,
-            )
-            resp.raise_for_status()
-            logger.info(f"LinkedIn: post published (id={resp.headers.get('x-restli-id', 'n/a')})")
+            post_id = self._do_post(payload)
+            logger.info(f"LinkedIn: post published (id={post_id})")
             return True
         except Exception as exc:
             logger.error(f"LinkedIn post failed: {exc}")
