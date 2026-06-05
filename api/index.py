@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import sys
+from datetime import datetime, timedelta, timezone
 
 # Ensure the project root is on the path so src/ imports work from Vercel
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -9,10 +10,16 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from dotenv import load_dotenv
 load_dotenv()
 
-from fastapi import FastAPI, HTTPException
+import jwt
+from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel
+
+_JWT_SECRET = os.getenv("JWT_SECRET", "dev-secret-change-in-prod")
+_TOKEN_EXPIRE_HOURS = 24
+_security = HTTPBearer()
 
 from src.config.settings import Settings
 from src.agents.trend_agent import TrendAgent
@@ -30,7 +37,45 @@ app.add_middleware(
 )
 
 
+# ── Auth helpers ───────────────────────────────────────────────────────────────
+
+def _get_users() -> dict[str, str]:
+    """Parse APP_USERS env var: 'user1:pass1,user2:pass2'"""
+    raw = os.getenv("APP_USERS", "")
+    users: dict[str, str] = {}
+    for pair in raw.split(","):
+        pair = pair.strip()
+        if ":" in pair:
+            u, p = pair.split(":", 1)
+            users[u.strip()] = p.strip()
+    return users
+
+def _create_token(username: str) -> str:
+    payload = {
+        "sub": username,
+        "exp": datetime.now(timezone.utc) + timedelta(hours=_TOKEN_EXPIRE_HOURS),
+    }
+    return jwt.encode(payload, _JWT_SECRET, algorithm="HS256")
+
+def _verify_token(
+    credentials: HTTPAuthorizationCredentials = Depends(_security),
+) -> str:
+    try:
+        payload = jwt.decode(
+            credentials.credentials, _JWT_SECRET, algorithms=["HS256"]
+        )
+        return payload["sub"]
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Session expired — please log in again")
+    except jwt.InvalidTokenError:
+        raise HTTPException(status_code=401, detail="Invalid token — please log in again")
+
+
 # ── Request / Response models ──────────────────────────────────────────────────
+
+class LoginRequest(BaseModel):
+    username: str
+    password: str
 
 class GenerateRequest(BaseModel):
     slot: str
@@ -71,8 +116,23 @@ def _source_label(source: str) -> str:
 
 # ── Endpoints ──────────────────────────────────────────────────────────────────
 
+@app.post("/api/login")
+def login(req: LoginRequest):
+    users = _get_users()
+    if not users:
+        raise HTTPException(status_code=503, detail="APP_USERS is not configured on this server")
+    if req.username not in users or users[req.username] != req.password:
+        raise HTTPException(status_code=401, detail="Invalid username or password")
+    return {"token": _create_token(req.username), "username": req.username}
+
+
+@app.get("/api/me")
+def me(user: str = Depends(_verify_token)):
+    return {"username": user}
+
+
 @app.get("/api/topics")
-def get_topics(search: str | None = None):
+def get_topics(search: str | None = None, user: str = Depends(_verify_token)):
     """Return trending topics, optionally filtered by a search query."""
     settings = Settings()
     agent = TrendAgent(settings)
@@ -98,7 +158,7 @@ def get_topics(search: str | None = None):
 
 
 @app.post("/api/generate")
-def generate_post(req: GenerateRequest):
+def generate_post(req: GenerateRequest, user: str = Depends(_verify_token)):
     """Fetch trends and generate social media content for the given slot."""
     settings = Settings()
     slot = _get_slot(req.slot)
@@ -132,7 +192,7 @@ def generate_post(req: GenerateRequest):
 
 
 @app.post("/api/publish")
-def publish_post(req: PublishRequest):
+def publish_post(req: PublishRequest, user: str = Depends(_verify_token)):
     """Publish a generated post to LinkedIn."""
     settings = Settings()
 

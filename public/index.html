@@ -36,6 +36,55 @@
       border-radius: 20px;
       font-weight: 500;
     }
+    .header-right { display: flex; align-items: center; gap: 12px; }
+    #userBadge { font-size: 0.78rem; color: #94a3b8; }
+    #logoutBtn {
+      font-size: 0.78rem; background: transparent; border: 1px solid #475569;
+      color: #cbd5e1; padding: 4px 12px; border-radius: 20px; cursor: pointer;
+    }
+    #logoutBtn:hover { background: #334155; }
+
+    /* ── Login overlay ── */
+    #loginOverlay {
+      position: fixed; inset: 0; background: #f0f2f7;
+      display: flex; align-items: center; justify-content: center;
+      z-index: 1000;
+    }
+    #loginOverlay.hidden { display: none; }
+    .login-card {
+      background: #fff; border-radius: 12px; padding: 40px;
+      width: 100%; max-width: 380px;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.10);
+    }
+    .login-card .logo {
+      font-size: 1.5rem; font-weight: 700; color: #1a1f36;
+      margin-bottom: 4px;
+    }
+    .login-card .subtitle {
+      font-size: 0.85rem; color: #6b7280; margin-bottom: 28px;
+    }
+    .login-field { margin-bottom: 16px; }
+    .login-field label {
+      display: block; font-size: 0.8rem; font-weight: 500;
+      color: #374151; margin-bottom: 6px;
+    }
+    .login-field input {
+      width: 100%; padding: 9px 12px; border: 1px solid #d1d5db;
+      border-radius: 8px; font-size: 0.9rem; outline: none;
+      transition: border-color 0.15s;
+    }
+    .login-field input:focus { border-color: #2563eb; }
+    #loginError {
+      font-size: 0.82rem; color: #ef4444;
+      margin-bottom: 12px; min-height: 18px;
+    }
+    #loginSubmit {
+      width: 100%; padding: 10px; background: #2563eb; color: #fff;
+      border: none; border-radius: 8px; font-size: 0.95rem;
+      font-weight: 600; cursor: pointer; transition: background 0.15s;
+    }
+    #loginSubmit:hover { background: #1d4ed8; }
+    #loginSubmit:disabled { background: #93c5fd; cursor: not-allowed; }
 
     /* ── Controls bar ── */
     .controls {
@@ -269,9 +318,31 @@
 <body>
 
 <!-- Header -->
+<!-- Login overlay -->
+<div id="loginOverlay">
+  <div class="login-card">
+    <div class="logo">Social Media Agent</div>
+    <div class="subtitle">Prophecy Techs — sign in to continue</div>
+    <div class="login-field">
+      <label for="loginUsername">Username</label>
+      <input type="text" id="loginUsername" autocomplete="username" placeholder="username" />
+    </div>
+    <div class="login-field">
+      <label for="loginPassword">Password</label>
+      <input type="password" id="loginPassword" autocomplete="current-password" placeholder="••••••••" />
+    </div>
+    <div id="loginError"></div>
+    <button id="loginSubmit" onclick="doLogin()">Sign In</button>
+  </div>
+</div>
+
 <header>
   <h1>Social Media Agent</h1>
-  <span class="brand">Prophecy Techs</span>
+  <div class="header-right">
+    <span id="userBadge"></span>
+    <span class="brand">Prophecy Techs</span>
+    <button id="logoutBtn" onclick="doLogout()">Sign out</button>
+  </div>
 </header>
 
 <!-- Controls bar -->
@@ -366,6 +437,73 @@
 </div>
 
 <script>
+  // ── Auth state ────────────────────────────────────────────────────────────
+  let authToken = localStorage.getItem('sma_token') || null;
+
+  function getAuthHeaders() {
+    return authToken
+      ? { 'Content-Type': 'application/json', 'Authorization': `Bearer ${authToken}` }
+      : { 'Content-Type': 'application/json' };
+  }
+
+  function showLoginOverlay(msg = '') {
+    document.getElementById('loginOverlay').classList.remove('hidden');
+    document.getElementById('loginError').textContent = msg;
+    document.getElementById('loginUsername').focus();
+  }
+
+  function hideLoginOverlay() {
+    document.getElementById('loginOverlay').classList.add('hidden');
+  }
+
+  async function doLogin() {
+    const username = document.getElementById('loginUsername').value.trim();
+    const password = document.getElementById('loginPassword').value;
+    if (!username || !password) {
+      document.getElementById('loginError').textContent = 'Enter username and password.';
+      return;
+    }
+    const btn = document.getElementById('loginSubmit');
+    btn.disabled = true;
+    btn.textContent = 'Signing in…';
+    document.getElementById('loginError').textContent = '';
+    try {
+      const res = await fetch(`${API_BASE}/api/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || `HTTP ${res.status}`);
+      }
+      const data = await res.json();
+      authToken = data.token;
+      localStorage.setItem('sma_token', authToken);
+      document.getElementById('userBadge').textContent = data.username;
+      hideLoginOverlay();
+      setStatus('Signed in. Ready.', 'ok');
+    } catch (e) {
+      document.getElementById('loginError').textContent = e.message;
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Sign In';
+    }
+  }
+
+  function doLogout() {
+    authToken = null;
+    localStorage.removeItem('sma_token');
+    document.getElementById('userBadge').textContent = '';
+    showLoginOverlay();
+  }
+
+  function handle401() {
+    authToken = null;
+    localStorage.removeItem('sma_token');
+    showLoginOverlay('Session expired — please sign in again.');
+  }
+
   // ── State ─────────────────────────────────────────────────────────────────
   let currentTopics = [];
   let selectedTopicTitle = null;
@@ -464,7 +602,8 @@
     setStatus('Fetching trending topics…', 'busy');
     disableControls(true);
     try {
-      const res = await fetch(`${API_BASE}/api/topics`, { signal: AbortSignal.timeout(60000) });
+      const res = await fetch(`${API_BASE}/api/topics`, { headers: getAuthHeaders(), signal: AbortSignal.timeout(60000) });
+      if (res.status === 401) { handle401(); return; }
       if (!res.ok) throw new Error(await extractError(res));
       const topics = await res.json();
       renderTopics(topics);
@@ -485,7 +624,8 @@
     disableControls(true);
     try {
       const url = `${API_BASE}/api/topics?search=${encodeURIComponent(q)}`;
-      const res = await fetch(url, { signal: AbortSignal.timeout(60000) });
+      const res = await fetch(url, { headers: getAuthHeaders(), signal: AbortSignal.timeout(60000) });
+      if (res.status === 401) { handle401(); return; }
       if (!res.ok) throw new Error(await extractError(res));
       const topics = await res.json();
       renderTopics(topics);
@@ -501,6 +641,30 @@
   document.getElementById('searchInput').addEventListener('keydown', e => {
     if (e.key === 'Enter') doSearch();
   });
+
+  // Allow Enter key on login form
+  ['loginUsername', 'loginPassword'].forEach(id => {
+    document.getElementById(id).addEventListener('keydown', e => {
+      if (e.key === 'Enter') doLogin();
+    });
+  });
+
+  // On load: validate stored token or show login
+  (async () => {
+    if (!authToken) { showLoginOverlay(); return; }
+    try {
+      const res = await fetch(`${API_BASE}/api/me`, { headers: getAuthHeaders() });
+      if (res.ok) {
+        const data = await res.json();
+        document.getElementById('userBadge').textContent = data.username;
+        hideLoginOverlay();
+      } else {
+        handle401();
+      }
+    } catch {
+      showLoginOverlay();
+    }
+  })();
 
   // ── Generate post ─────────────────────────────────────────────────────────
   async function doGenerate() {
@@ -519,10 +683,11 @@
     try {
       const res = await fetch(`${API_BASE}/api/generate`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders(),
         body: JSON.stringify(body),
         signal: AbortSignal.timeout(90000),
       });
+      if (res.status === 401) { handle401(); return; }
       if (!res.ok) throw new Error(await extractError(res));
       const data = await res.json();
       renderPreview(data, slot);
@@ -597,10 +762,11 @@
     try {
       const res = await fetch(`${API_BASE}/api/publish`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders(),
         body: JSON.stringify({ topic, linkedin_content, hashtags: currentHashtags, slot }),
         signal: AbortSignal.timeout(60000),
       });
+      if (res.status === 401) { handle401(); return; }
       if (!res.ok) throw new Error(await extractError(res));
       const data = await res.json();
       setStatus('Published to LinkedIn successfully!', 'ok');
