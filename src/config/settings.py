@@ -43,6 +43,7 @@ class Settings(BaseSettings):
         "software development, AI/ML, cloud computing, DevOps, web development, cybersecurity"
     )
     output_dir: str = "./output"
+    require_approval: bool = False  # if true, show preview and prompt before publishing
 
     @property
     def images_dir(self) -> str:

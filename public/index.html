@@ -1,0 +1,637 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Social Media Agent — Prophecy Techs</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #f0f2f7;
+      color: #1a1f36;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ── Header ── */
+    header {
+      background: #1a1f36;
+      color: #fff;
+      padding: 0 24px;
+      height: 56px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-shrink: 0;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.25);
+    }
+    header h1 { font-size: 1.1rem; font-weight: 600; letter-spacing: 0.01em; }
+    header .brand {
+      font-size: 0.78rem;
+      background: #2563eb;
+      padding: 4px 12px;
+      border-radius: 20px;
+      font-weight: 500;
+    }
+
+    /* ── Controls bar ── */
+    .controls {
+      background: #fff;
+      border-bottom: 1px solid #e2e8f0;
+      padding: 12px 24px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .controls label { font-size: 0.85rem; font-weight: 500; color: #374151; }
+    select, input[type="text"] {
+      height: 36px;
+      border: 1px solid #d1d5db;
+      border-radius: 6px;
+      padding: 0 10px;
+      font-size: 0.875rem;
+      color: #1a1f36;
+      background: #fff;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    select:focus, input[type="text"]:focus { border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37,99,235,0.12); }
+    select { padding-right: 28px; appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' fill='none'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%236B7280' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+      background-repeat: no-repeat; background-position: right 10px center;
+    }
+    #searchInput { width: 220px; }
+    .btn {
+      height: 36px;
+      padding: 0 18px;
+      border: none;
+      border-radius: 6px;
+      font-size: 0.875rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 0.15s, opacity 0.15s;
+      white-space: nowrap;
+    }
+    .btn:disabled { opacity: 0.55; cursor: not-allowed; }
+    .btn-primary { background: #2563eb; color: #fff; }
+    .btn-primary:hover:not(:disabled) { background: #1d4ed8; }
+    .btn-secondary { background: #e2e8f0; color: #374151; }
+    .btn-secondary:hover:not(:disabled) { background: #cbd5e1; }
+    .btn-success { background: #059669; color: #fff; }
+    .btn-success:hover:not(:disabled) { background: #047857; }
+    .controls-sep { width: 1px; height: 28px; background: #e2e8f0; }
+
+    /* ── Main two-column layout ── */
+    main {
+      flex: 1;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0;
+      overflow: hidden;
+    }
+    @media (max-width: 768px) {
+      main { grid-template-columns: 1fr; overflow: auto; }
+    }
+
+    /* ── Panels ── */
+    .panel {
+      display: flex;
+      flex-direction: column;
+      background: #fff;
+      overflow: hidden;
+    }
+    .panel-left { border-right: 1px solid #e2e8f0; }
+    .panel-header {
+      padding: 14px 20px 10px;
+      border-bottom: 1px solid #e2e8f0;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-shrink: 0;
+    }
+    .panel-header h2 { font-size: 0.8rem; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.08em; color: #6b7280; }
+    .panel-body { flex: 1; overflow-y: auto; padding: 12px 20px; }
+
+    /* ── Topic list ── */
+    .topic-list { list-style: none; display: flex; flex-direction: column; gap: 6px; }
+    .topic-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      padding: 10px 12px;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: border-color 0.12s, background 0.12s;
+    }
+    .topic-item:hover { border-color: #93c5fd; background: #eff6ff; }
+    .topic-item.selected { border-color: #2563eb; background: #eff6ff; }
+    .topic-item input[type="radio"] { margin-top: 3px; accent-color: #2563eb; flex-shrink: 0; }
+    .topic-meta { flex: 1; min-width: 0; }
+    .topic-title {
+      font-size: 0.875rem;
+      font-weight: 500;
+      color: #1a1f36;
+      line-height: 1.4;
+      word-break: break-word;
+    }
+    .topic-row2 { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
+    .badge {
+      display: inline-block;
+      font-size: 0.68rem;
+      font-weight: 700;
+      padding: 2px 7px;
+      border-radius: 4px;
+      letter-spacing: 0.04em;
+      white-space: nowrap;
+    }
+    .badge-hn { background: #fff3e0; color: #e65c00; }
+    .badge-dev { background: #e8f5e9; color: #2e7d32; }
+    .badge-reddit { background: #fff3f3; color: #cc2200; }
+    .badge-google { background: #e3f2fd; color: #1565c0; }
+    .badge-other { background: #f3e5f5; color: #6a1b9a; }
+    .topic-score { font-size: 0.72rem; color: #9ca3af; }
+    .topic-url { font-size: 0.72rem; color: #2563eb; text-decoration: none; }
+    .topic-url:hover { text-decoration: underline; }
+
+    /* ── Generate button row ── */
+    .panel-footer {
+      padding: 12px 20px;
+      border-top: 1px solid #e2e8f0;
+      flex-shrink: 0;
+    }
+
+    /* ── Preview panel ── */
+    .preview-field { margin-bottom: 14px; }
+    .preview-label {
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      color: #6b7280;
+      margin-bottom: 6px;
+    }
+    .preview-topic {
+      font-size: 0.95rem;
+      font-weight: 600;
+      color: #1a1f36;
+      line-height: 1.4;
+    }
+    #linkedinTextarea {
+      width: 100%;
+      min-height: 260px;
+      border: 1px solid #d1d5db;
+      border-radius: 8px;
+      padding: 12px;
+      font-size: 0.875rem;
+      line-height: 1.6;
+      color: #1a1f36;
+      resize: vertical;
+      outline: none;
+      font-family: inherit;
+      transition: border-color 0.15s;
+    }
+    #linkedinTextarea:focus { border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37,99,235,0.1); }
+    .hashtag-list { display: flex; flex-wrap: wrap; gap: 6px; }
+    .hashtag-chip {
+      background: #eff6ff;
+      color: #1d4ed8;
+      border: 1px solid #bfdbfe;
+      border-radius: 20px;
+      padding: 3px 10px;
+      font-size: 0.78rem;
+      font-weight: 500;
+    }
+
+    /* ── Spinner ── */
+    .spinner-wrap {
+      display: none;
+      align-items: center;
+      gap: 10px;
+      padding: 24px 0;
+      justify-content: center;
+    }
+    .spinner-wrap.visible { display: flex; }
+    .spinner {
+      width: 22px; height: 22px;
+      border: 3px solid #e2e8f0;
+      border-top-color: #2563eb;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .spinner-text { font-size: 0.875rem; color: #6b7280; }
+
+    /* ── Empty state ── */
+    .empty-state {
+      text-align: center;
+      padding: 40px 20px;
+      color: #9ca3af;
+      font-size: 0.875rem;
+    }
+    .empty-state .icon { font-size: 2rem; margin-bottom: 10px; }
+
+    /* ── Status bar ── */
+    #statusBar {
+      background: #1a1f36;
+      color: #94a3b8;
+      font-size: 0.78rem;
+      padding: 6px 24px;
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-height: 30px;
+    }
+    #statusBar .dot {
+      width: 7px; height: 7px; border-radius: 50%;
+      background: #64748b; flex-shrink: 0;
+      transition: background 0.2s;
+    }
+    #statusBar.ok .dot { background: #22c55e; }
+    #statusBar.err .dot { background: #ef4444; }
+    #statusBar.busy .dot {
+      background: #facc15;
+      animation: pulse 1s ease-in-out infinite;
+    }
+    @keyframes pulse { 0%,100%{opacity:1}50%{opacity:0.4} }
+
+    /* ── Misc ── */
+    .full-width { width: 100%; }
+    .char-count { font-size: 0.72rem; color: #9ca3af; margin-top: 4px; text-align: right; }
+  </style>
+</head>
+<body>
+
+<!-- Header -->
+<header>
+  <h1>Social Media Agent</h1>
+  <span class="brand">Prophecy Techs</span>
+</header>
+
+<!-- Controls bar -->
+<div class="controls">
+  <label for="slotSelect">Slot:</label>
+  <select id="slotSelect">
+    <option value="morning_brief">Morning Brief</option>
+    <option value="technical_deep_dive" selected>Technical Deep Dive</option>
+    <option value="visual_showcase">Visual Showcase</option>
+    <option value="evening_blog">Evening Blog</option>
+  </select>
+
+  <span class="controls-sep"></span>
+
+  <label for="searchInput">Search:</label>
+  <input type="text" id="searchInput" placeholder="e.g. Kubernetes, LLM..." />
+  <button class="btn btn-secondary" id="searchBtn" onclick="doSearch()">Search</button>
+  <button class="btn btn-primary" id="fetchBtn" onclick="doFetch()">Fetch Trending</button>
+</div>
+
+<!-- Main two-column layout -->
+<main>
+  <!-- Left: Topic list -->
+  <div class="panel panel-left">
+    <div class="panel-header">
+      <h2>Trending Topics</h2>
+      <span id="topicCount" style="font-size:0.78rem;color:#9ca3af;"></span>
+    </div>
+    <div class="panel-body" id="topicListBody">
+      <div class="empty-state">
+        <div class="icon">📡</div>
+        Click <strong>Fetch Trending</strong> to load topics,<br>or type a keyword and hit <strong>Search</strong>.
+      </div>
+    </div>
+    <div class="panel-footer">
+      <button class="btn btn-primary full-width" id="generateBtn" onclick="doGenerate()" disabled>
+        Generate Post
+      </button>
+    </div>
+  </div>
+
+  <!-- Right: Post preview -->
+  <div class="panel">
+    <div class="panel-header">
+      <h2>Post Preview</h2>
+      <span id="previewSlotBadge" style="font-size:0.75rem;color:#6b7280;"></span>
+    </div>
+    <div class="panel-body" id="previewBody">
+
+      <!-- Spinner shown during generation -->
+      <div class="spinner-wrap" id="spinnerWrap">
+        <div class="spinner"></div>
+        <span class="spinner-text" id="spinnerText">Generating… this can take 30–60 seconds</span>
+      </div>
+
+      <!-- Empty state -->
+      <div class="empty-state" id="previewEmpty">
+        <div class="icon">✍️</div>
+        Select a topic and click <strong>Generate Post</strong><br>to create LinkedIn content.
+      </div>
+
+      <!-- Populated preview -->
+      <div id="previewContent" style="display:none;">
+        <div class="preview-field">
+          <div class="preview-label">Topic</div>
+          <div class="preview-topic" id="previewTopic"></div>
+        </div>
+
+        <div class="preview-field">
+          <div class="preview-label">LinkedIn Post <span style="font-weight:400;text-transform:none;letter-spacing:0;">(editable)</span></div>
+          <textarea id="linkedinTextarea" oninput="updateCharCount()"></textarea>
+          <div class="char-count" id="charCount">0 / 3000 chars</div>
+        </div>
+
+        <div class="preview-field">
+          <div class="preview-label">Hashtags</div>
+          <div class="hashtag-list" id="hashtagList"></div>
+        </div>
+
+        <button class="btn btn-success full-width" id="publishBtn" onclick="doPublish()">
+          Publish to LinkedIn
+        </button>
+      </div>
+    </div>
+  </div>
+</main>
+
+<!-- Status bar -->
+<div id="statusBar">
+  <div class="dot"></div>
+  <span id="statusText">Ready</span>
+</div>
+
+<script>
+  // ── State ─────────────────────────────────────────────────────────────────
+  let currentTopics = [];
+  let selectedTopicTitle = null;
+  let activeSearchQuery = null;
+  let currentHashtags = [];
+
+  // ── API base: auto-detect origin ──────────────────────────────────────────
+  const API_BASE = window.location.origin;
+
+  // ── Status bar ────────────────────────────────────────────────────────────
+  function setStatus(msg, state = '') {
+    const bar = document.getElementById('statusBar');
+    bar.className = state ? state : '';
+    document.getElementById('statusText').textContent = msg;
+  }
+
+  // ── Badge helpers ─────────────────────────────────────────────────────────
+  function badgeClass(source) {
+    const s = source.toLowerCase();
+    if (s === 'hn') return 'badge-hn';
+    if (s === 'dev') return 'badge-dev';
+    if (s === 'reddit') return 'badge-reddit';
+    if (s === 'google') return 'badge-google';
+    return 'badge-other';
+  }
+
+  // ── Render topic list ─────────────────────────────────────────────────────
+  function renderTopics(topics) {
+    currentTopics = topics;
+    selectedTopicTitle = null;
+    document.getElementById('generateBtn').disabled = true;
+    document.getElementById('topicCount').textContent = topics.length
+      ? `${topics.length} topic${topics.length !== 1 ? 's' : ''}`
+      : '';
+
+    const body = document.getElementById('topicListBody');
+    if (!topics.length) {
+      body.innerHTML = '<div class="empty-state"><div class="icon">🔍</div>No results found.</div>';
+      return;
+    }
+
+    const ul = document.createElement('ul');
+    ul.className = 'topic-list';
+
+    topics.forEach((t, idx) => {
+      const li = document.createElement('li');
+      li.className = 'topic-item';
+      li.dataset.idx = idx;
+
+      const scoreStr = t.score > 0 ? `· ${Math.round(t.score).toLocaleString()} pts` : '';
+      const urlHtml = t.url
+        ? `<a class="topic-url" href="${escHtml(t.url)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">↗ link</a>`
+        : '';
+
+      li.innerHTML = `
+        <input type="radio" name="topic" value="${idx}" id="topic-${idx}" />
+        <div class="topic-meta">
+          <div class="topic-title">${escHtml(t.title)}</div>
+          <div class="topic-row2">
+            <span class="badge ${badgeClass(t.source)}">${escHtml(t.source)}</span>
+            <span class="topic-score">${scoreStr}</span>
+            ${urlHtml}
+          </div>
+        </div>
+      `;
+
+      li.addEventListener('click', () => selectTopic(idx, li));
+      li.querySelector('input').addEventListener('change', () => selectTopic(idx, li));
+      ul.appendChild(li);
+    });
+
+    body.innerHTML = '';
+    body.appendChild(ul);
+  }
+
+  function selectTopic(idx, li) {
+    document.querySelectorAll('.topic-item').forEach(el => el.classList.remove('selected'));
+    li.classList.add('selected');
+    li.querySelector('input').checked = true;
+    selectedTopicTitle = currentTopics[idx].title;
+    document.getElementById('generateBtn').disabled = false;
+  }
+
+  function escHtml(str) {
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  // ── Fetch trending ────────────────────────────────────────────────────────
+  async function doFetch() {
+    activeSearchQuery = null;
+    document.getElementById('searchInput').value = '';
+    setStatus('Fetching trending topics…', 'busy');
+    disableControls(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/topics`, { signal: AbortSignal.timeout(60000) });
+      if (!res.ok) throw new Error(await extractError(res));
+      const topics = await res.json();
+      renderTopics(topics);
+      setStatus(`Loaded ${topics.length} trending topics.`, 'ok');
+    } catch (e) {
+      setStatus(`Error: ${e.message}`, 'err');
+    } finally {
+      disableControls(false);
+    }
+  }
+
+  // ── Search ────────────────────────────────────────────────────────────────
+  async function doSearch() {
+    const q = document.getElementById('searchInput').value.trim();
+    if (!q) { doFetch(); return; }
+    activeSearchQuery = q;
+    setStatus(`Searching for "${q}"…`, 'busy');
+    disableControls(true);
+    try {
+      const url = `${API_BASE}/api/topics?search=${encodeURIComponent(q)}`;
+      const res = await fetch(url, { signal: AbortSignal.timeout(60000) });
+      if (!res.ok) throw new Error(await extractError(res));
+      const topics = await res.json();
+      renderTopics(topics);
+      setStatus(`Search for "${q}" returned ${topics.length} results.`, 'ok');
+    } catch (e) {
+      setStatus(`Error: ${e.message}`, 'err');
+    } finally {
+      disableControls(false);
+    }
+  }
+
+  // Allow Enter key in search field
+  document.getElementById('searchInput').addEventListener('keydown', e => {
+    if (e.key === 'Enter') doSearch();
+  });
+
+  // ── Generate post ─────────────────────────────────────────────────────────
+  async function doGenerate() {
+    const slot = document.getElementById('slotSelect').value;
+    setStatus('Generating post — this can take 30–60 seconds…', 'busy');
+    disableControls(true);
+    showSpinner(true);
+    hidePreview();
+
+    const body = {
+      slot,
+      topic_title: selectedTopicTitle || null,
+      search_query: activeSearchQuery || null,
+    };
+
+    try {
+      const res = await fetch(`${API_BASE}/api/generate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+        signal: AbortSignal.timeout(90000),
+      });
+      if (!res.ok) throw new Error(await extractError(res));
+      const data = await res.json();
+      renderPreview(data, slot);
+      setStatus(`Post generated: "${data.topic}"`, 'ok');
+    } catch (e) {
+      setStatus(`Error: ${e.message}`, 'err');
+    } finally {
+      disableControls(false);
+      showSpinner(false);
+    }
+  }
+
+  // ── Render preview ────────────────────────────────────────────────────────
+  function renderPreview(data, slot) {
+    document.getElementById('previewEmpty').style.display = 'none';
+    document.getElementById('previewContent').style.display = 'block';
+
+    document.getElementById('previewTopic').textContent = data.topic;
+    document.getElementById('linkedinTextarea').value = data.linkedin_content;
+    updateCharCount();
+
+    currentHashtags = data.hashtags || [];
+    const hashtagEl = document.getElementById('hashtagList');
+    hashtagEl.innerHTML = currentHashtags
+      .map(h => `<span class="hashtag-chip">#${escHtml(h)}</span>`)
+      .join('');
+
+    const slotLabels = {
+      morning_brief: 'Morning Brief',
+      technical_deep_dive: 'Technical Deep Dive',
+      visual_showcase: 'Visual Showcase',
+      evening_blog: 'Evening Blog',
+    };
+    document.getElementById('previewSlotBadge').textContent = slotLabels[slot] || slot;
+  }
+
+  function hidePreview() {
+    document.getElementById('previewEmpty').style.display = 'none';
+    document.getElementById('previewContent').style.display = 'none';
+  }
+
+  function showSpinner(visible) {
+    const wrap = document.getElementById('spinnerWrap');
+    wrap.classList.toggle('visible', visible);
+  }
+
+  function updateCharCount() {
+    const ta = document.getElementById('linkedinTextarea');
+    const len = ta.value.length;
+    document.getElementById('charCount').textContent = `${len.toLocaleString()} / 3,000 chars`;
+    document.getElementById('charCount').style.color = len > 3000 ? '#ef4444' : '#9ca3af';
+  }
+
+  // ── Publish ───────────────────────────────────────────────────────────────
+  async function doPublish() {
+    const topic = document.getElementById('previewTopic').textContent;
+    const linkedin_content = document.getElementById('linkedinTextarea').value;
+    const slot = document.getElementById('slotSelect').value;
+
+    if (!topic || !linkedin_content) {
+      setStatus('Nothing to publish — generate a post first.', 'err');
+      return;
+    }
+    if (linkedin_content.length > 3000) {
+      setStatus('LinkedIn content exceeds 3,000 characters. Please trim before publishing.', 'err');
+      return;
+    }
+
+    setStatus('Publishing to LinkedIn…', 'busy');
+    document.getElementById('publishBtn').disabled = true;
+
+    try {
+      const res = await fetch(`${API_BASE}/api/publish`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ topic, linkedin_content, hashtags: currentHashtags, slot }),
+        signal: AbortSignal.timeout(60000),
+      });
+      if (!res.ok) throw new Error(await extractError(res));
+      const data = await res.json();
+      setStatus('Published to LinkedIn successfully!', 'ok');
+    } catch (e) {
+      setStatus(`Publish failed: ${e.message}`, 'err');
+    } finally {
+      document.getElementById('publishBtn').disabled = false;
+    }
+  }
+
+  // ── Helpers ───────────────────────────────────────────────────────────────
+  async function extractError(res) {
+    try {
+      const j = await res.json();
+      return j.detail || `HTTP ${res.status}`;
+    } catch {
+      return `HTTP ${res.status}`;
+    }
+  }
+
+  function disableControls(disabled) {
+    ['fetchBtn', 'searchBtn', 'generateBtn', 'publishBtn', 'slotSelect', 'searchInput']
+      .forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.disabled = disabled;
+      });
+    // Keep generateBtn disabled if no topic selected
+    if (!disabled && !selectedTopicTitle) {
+      document.getElementById('generateBtn').disabled = true;
+    }
+  }
+</script>
+</body>
+</html>

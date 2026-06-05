@@ -139,14 +139,25 @@ class ContentAgent:
         self.settings = settings
         self.client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
 
-    def generate(self, trend_report: TrendReport, slot: PostSlot) -> GeneratedPost:
+    def generate(
+        self,
+        trend_report: TrendReport,
+        slot: PostSlot,
+        selected_topic: str | None = None,
+    ) -> GeneratedPost:
         logger.info(f"Generating content for slot: {slot.value}")
+
+        topic_instruction = (
+            f"Focus specifically on this topic: {selected_topic}"
+            if selected_topic
+            else "Choose the single most compelling trend above and generate the post."
+        )
 
         user_message = (
             f"Focus area: {self.settings.tech_focus}\n\n"
             f"{trend_report.as_text()}\n\n"
             f"Time slot instructions: {SLOT_INSTRUCTIONS[slot]}\n\n"
-            "Choose the single most compelling trend above and generate the post."
+            f"{topic_instruction}"
         )
 
         response = self.client.messages.create(
