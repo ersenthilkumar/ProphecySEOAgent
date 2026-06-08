@@ -118,9 +118,12 @@ def _source_label(source: str) -> str:
 
 @app.post("/api/login")
 def login(req: LoginRequest):
+    raw = os.getenv("APP_USERS", "")
+    if not raw:
+        raise HTTPException(status_code=503, detail=f"APP_USERS is empty (len=0)")
     users = _get_users()
     if not users:
-        raise HTTPException(status_code=503, detail="APP_USERS is not configured on this server")
+        raise HTTPException(status_code=503, detail=f"APP_USERS parse failed. len={len(raw)}, repr={repr(raw[:30])}")
     if req.username not in users or users[req.username] != req.password:
         raise HTTPException(status_code=401, detail="Invalid username or password")
     return {"token": _create_token(req.username), "username": req.username}
