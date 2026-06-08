@@ -10,6 +10,12 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from dotenv import load_dotenv
 load_dotenv()
 
+# Strip UTF-8 BOM that PowerShell pipe encoding prepends to env var values
+_BOM = chr(0xFEFF)
+for _k in list(os.environ.keys()):
+    if os.environ[_k].startswith(_BOM):
+        os.environ[_k] = os.environ[_k].lstrip(_BOM)
+
 import jwt
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
