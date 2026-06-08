@@ -116,6 +116,16 @@ def _source_label(source: str) -> str:
 
 # ── Endpoints ──────────────────────────────────────────────────────────────────
 
+@app.get("/api/debug-env")
+def debug_env():
+    return {
+        "has_app_users": bool(os.getenv("APP_USERS")),
+        "app_users_len": len(os.getenv("APP_USERS", "")),
+        "has_jwt_secret": bool(os.getenv("JWT_SECRET")),
+        "has_anthropic_key": bool(os.getenv("ANTHROPIC_API_KEY")),
+    }
+
+
 @app.post("/api/login")
 def login(req: LoginRequest):
     users = _get_users()
