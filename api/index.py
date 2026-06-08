@@ -131,6 +131,35 @@ def login(req: LoginRequest):
     return {"token": _create_token(req.username), "username": req.username}
 
 
+@app.get("/api/diag")
+def diag(user: str = Depends(_verify_token)):
+    import traceback
+    out: dict = {}
+    try:
+        settings = Settings()
+        out["settings"] = "ok"
+    except Exception as e:
+        out["settings"] = traceback.format_exc()
+        return out
+    try:
+        agent = TrendAgent(settings)
+        out["agent_init"] = "ok"
+    except Exception as e:
+        out["agent_init"] = traceback.format_exc()
+        return out
+    for name, fn, args in [
+        ("hackernews", agent._fetch_hackernews, (3,)),
+        ("devto",      agent._fetch_devto,       (3,)),
+        ("google",     agent._fetch_google_trends,(3,)),
+    ]:
+        try:
+            results = fn(*args)
+            out[name] = f"{len(results)} items" + (f" — e.g. {results[0].title[:50]}" if results else "")
+        except Exception as e:
+            out[name] = traceback.format_exc()
+    return out
+
+
 @app.get("/api/me")
 def me(user: str = Depends(_verify_token)):
     return {"username": user}
