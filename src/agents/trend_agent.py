@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import requests
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from typing import Optional
 
@@ -63,29 +64,30 @@ class TrendAgent:
 
     # ── individual sources ────────────────────────────────────────────────────
 
-    def _fetch_hackernews(self, count: int = 15) -> list[Trend]:
+    def _fetch_hackernews(self, count: int = 10) -> list[Trend]:
         try:
-            ids = requests.get(self.HN_TOP_URL, timeout=10).json()[:count]
-            trends: list[Trend] = []
-            for story_id in ids:
+            ids = requests.get(self.HN_TOP_URL, timeout=5).json()[:count]
+
+            def _fetch_item(story_id: int) -> Trend | None:
                 try:
                     item = requests.get(
-                        self.HN_ITEM_URL.format(story_id), timeout=5
+                        self.HN_ITEM_URL.format(story_id), timeout=3
                     ).json()
                     if item and item.get("type") == "story":
-                        trends.append(
-                            Trend(
-                                title=item.get("title", ""),
-                                source="HackerNews",
-                                url=item.get(
-                                    "url",
-                                    f"https://news.ycombinator.com/item?id={story_id}",
-                                ),
-                                score=float(item.get("score", 0)),
-                            )
+                        return Trend(
+                            title=item.get("title", ""),
+                            source="HackerNews",
+                            url=item.get("url", f"https://news.ycombinator.com/item?id={story_id}"),
+                            score=float(item.get("score", 0)),
                         )
                 except Exception:
                     pass
+                return None
+
+            with ThreadPoolExecutor(max_workers=count) as ex:
+                results = list(ex.map(_fetch_item, ids, timeout=7))
+
+            trends = [t for t in results if t]
             logger.info(f"HackerNews: fetched {len(trends)} stories")
             return trends
         except Exception as exc:
@@ -153,7 +155,7 @@ class TrendAgent:
         try:
             resp = requests.get(
                 RSS_URL,
-                timeout=10,
+                timeout=4,
                 headers={"User-Agent": "Mozilla/5.0 (compatible; SocialAgent/1.0)"},
             )
             resp.raise_for_status()
@@ -205,7 +207,7 @@ class TrendAgent:
                 "https://dev.to/api/articles",
                 params={"top": 7, "per_page": count * 2},
                 headers={"User-Agent": "SocialMediaAgent/1.0"},
-                timeout=10,
+                timeout=4,
             )
             resp.raise_for_status()
             trends: list[Trend] = []
@@ -324,44 +326,52 @@ class TrendAgent:
 
     # ── public API ────────────────────────────────────────────────────────────
 
-    def fetch(self) -> TrendReport:
-        all_trends: list[Trend] = []
-        all_trends.extend(self._fetch_hackernews(15))
-        all_trends.extend(self._fetch_reddit(15))
-        all_trends.extend(self._fetch_google_trends(10))
-        all_trends.extend(self._fetch_devto(15))
-
-        # Deduplicate by normalised title prefix
+    def _aggregate(self, trends_lists: list[list[Trend]], limit: int = 25) -> TrendReport:
         seen: set[str] = set()
         unique: list[Trend] = []
-        for t in all_trends:
-            key = t.title[:60].lower()
-            if key not in seen:
-                seen.add(key)
-                unique.append(t)
-
+        for trends in trends_lists:
+            for t in trends:
+                key = t.title[:60].lower()
+                if key not in seen:
+                    seen.add(key)
+                    unique.append(t)
         unique.sort(key=lambda t: t.score, reverse=True)
-        report = TrendReport(trends=unique[:25])
+        return TrendReport(trends=unique[:limit])
+
+    def _run_concurrent(self, tasks: list) -> list[list[Trend]]:
+        """Run [(fn, *args), ...] concurrently with an 8s wall-clock budget."""
+        results: list[list[Trend]] = [[] for _ in tasks]
+        with ThreadPoolExecutor(max_workers=len(tasks)) as ex:
+            future_to_idx = {ex.submit(fn, *args): i for i, (fn, *args) in enumerate(tasks)}
+            for future in as_completed(future_to_idx, timeout=8):
+                idx = future_to_idx[future]
+                try:
+                    results[idx] = future.result()
+                except Exception:
+                    pass
+        return results
+
+    def fetch(self) -> TrendReport:
+        tasks = [
+            (self._fetch_hackernews, 10),
+            (self._fetch_reddit, 10),
+            (self._fetch_google_trends, 8),
+            (self._fetch_devto, 10),
+        ]
+        results = self._run_concurrent(tasks)
+        report = self._aggregate(results)
         logger.info(f"TrendAgent aggregated {len(report.trends)} unique trends")
         return report
 
     def search(self, query: str) -> TrendReport:
         """Search all available sources for articles related to `query`."""
         logger.info(f"Searching trends for: [bold]{query}[/bold]")
-        all_trends: list[Trend] = []
-        all_trends.extend(self._search_hackernews(query, 15))
-        all_trends.extend(self._search_reddit(query, 15))
-        all_trends.extend(self._search_devto(query, 15))
-
-        seen: set[str] = set()
-        unique: list[Trend] = []
-        for t in all_trends:
-            key = t.title[:60].lower()
-            if key not in seen:
-                seen.add(key)
-                unique.append(t)
-
-        unique.sort(key=lambda t: t.score, reverse=True)
-        report = TrendReport(trends=unique[:25])
+        tasks = [
+            (self._search_hackernews, query, 12),
+            (self._search_reddit, query, 10),
+            (self._search_devto, query, 12),
+        ]
+        results = self._run_concurrent(tasks)
+        report = self._aggregate(results)
         logger.info(f"Search returned {len(report.trends)} unique articles for '{query}'")
         return report
