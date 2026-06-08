@@ -40,13 +40,18 @@ app.add_middleware(
 # ── Auth helpers ───────────────────────────────────────────────────────────────
 
 def _get_users() -> dict[str, str]:
-    """Parse APP_USERS env var: 'user1:pass1,user2:pass2'"""
+    """Parse APP_USERS env var.
+
+    Supports both separators because Vercel CLI converts ':' to '=' when
+    piping values via stdin: 'user1:pass1' or 'user1=pass1', comma-separated.
+    """
     raw = os.getenv("APP_USERS", "")
     users: dict[str, str] = {}
     for pair in raw.split(","):
         pair = pair.strip()
-        if ":" in pair:
-            u, p = pair.split(":", 1)
+        sep = ":" if ":" in pair else "=" if "=" in pair else None
+        if sep:
+            u, p = pair.split(sep, 1)
             users[u.strip()] = p.strip()
     return users
 
@@ -118,12 +123,9 @@ def _source_label(source: str) -> str:
 
 @app.post("/api/login")
 def login(req: LoginRequest):
-    raw = os.getenv("APP_USERS", "")
-    if not raw:
-        raise HTTPException(status_code=503, detail=f"APP_USERS is empty (len=0)")
     users = _get_users()
     if not users:
-        raise HTTPException(status_code=503, detail=f"APP_USERS parse failed. len={len(raw)}, repr={repr(raw[:30])}")
+        raise HTTPException(status_code=503, detail="APP_USERS is not configured on this server")
     if req.username not in users or users[req.username] != req.password:
         raise HTTPException(status_code=401, detail="Invalid username or password")
     return {"token": _create_token(req.username), "username": req.username}
