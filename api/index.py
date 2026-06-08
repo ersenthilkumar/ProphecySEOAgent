@@ -139,15 +139,19 @@ def me(user: str = Depends(_verify_token)):
 @app.get("/api/topics")
 def get_topics(search: str | None = None, user: str = Depends(_verify_token)):
     """Return trending topics, optionally filtered by a search query."""
+    import traceback
     settings = Settings()
-    agent = TrendAgent(settings)
+    try:
+        agent = TrendAgent(settings)
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"TrendAgent init failed: {exc}\n{traceback.format_exc()}")
     try:
         if search and search.strip():
             report = agent.search(search.strip())
         else:
             report = agent.fetch()
     except Exception as exc:
-        raise HTTPException(status_code=502, detail=f"Trend fetch failed: {exc}")
+        raise HTTPException(status_code=502, detail=f"Trend fetch failed: {exc}\n{traceback.format_exc()}")
 
     return [
         {
