@@ -139,19 +139,15 @@ def me(user: str = Depends(_verify_token)):
 @app.get("/api/topics")
 def get_topics(search: str | None = None, user: str = Depends(_verify_token)):
     """Return trending topics, optionally filtered by a search query."""
-    import traceback
-    settings = Settings()
     try:
+        settings = Settings()
         agent = TrendAgent(settings)
-    except Exception as exc:
-        raise HTTPException(status_code=502, detail=f"TrendAgent init failed: {exc}\n{traceback.format_exc()}")
-    try:
         if search and search.strip():
             report = agent.search(search.strip())
         else:
             report = agent.fetch()
     except Exception as exc:
-        raise HTTPException(status_code=502, detail=f"Trend fetch failed: {exc}\n{traceback.format_exc()}")
+        raise HTTPException(status_code=502, detail=f"Trend fetch failed: {exc}")
 
     return [
         {
@@ -169,20 +165,21 @@ def get_topics(search: str | None = None, user: str = Depends(_verify_token)):
 @app.post("/api/generate")
 def generate_post(req: GenerateRequest, user: str = Depends(_verify_token)):
     """Fetch trends and generate social media content for the given slot."""
-    settings = Settings()
-    slot = _get_slot(req.slot)
-
-    trend_agent = TrendAgent(settings)
     try:
+        settings = Settings()
+        slot = _get_slot(req.slot)
+        trend_agent = TrendAgent(settings)
         if req.search_query and req.search_query.strip():
             report = trend_agent.search(req.search_query.strip())
         else:
             report = trend_agent.fetch()
+    except HTTPException:
+        raise
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"Trend fetch failed: {exc}")
 
-    content_agent = ContentAgent(settings)
     try:
+        content_agent = ContentAgent(settings)
         post = content_agent.generate(
             trend_report=report,
             slot=slot,
@@ -203,7 +200,10 @@ def generate_post(req: GenerateRequest, user: str = Depends(_verify_token)):
 @app.post("/api/publish")
 def publish_post(req: PublishRequest, user: str = Depends(_verify_token)):
     """Publish a generated post to LinkedIn."""
-    settings = Settings()
+    try:
+        settings = Settings()
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Configuration error: {exc}")
 
     if not settings.linkedin_enabled:
         raise HTTPException(status_code=503, detail="LinkedIn is not configured on this server.")

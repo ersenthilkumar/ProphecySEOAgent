@@ -14,8 +14,8 @@ class Settings(BaseSettings):
     anthropic_api_key: str
     claude_model: str = "claude-opus-4-7"
 
-    # OpenAI (DALL-E)
-    openai_api_key: str
+    # OpenAI (DALL-E) — optional; image generation is skipped if not set
+    openai_api_key: str = ""
 
     # Twitter/X
     twitter_api_key: str = ""
