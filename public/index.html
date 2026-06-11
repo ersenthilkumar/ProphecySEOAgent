@@ -357,6 +357,14 @@
 
   <span class="controls-sep"></span>
 
+  <label for="audienceSelect">Audience:</label>
+  <select id="audienceSelect">
+    <option value="tech_practitioners" selected>Tech Practitioners</option>
+    <option value="enterprise_leaders">Enterprise Leaders</option>
+  </select>
+
+  <span class="controls-sep"></span>
+
   <label for="searchInput">Search:</label>
   <input type="text" id="searchInput" placeholder="e.g. Kubernetes, LLM..." />
   <button class="btn btn-secondary" id="searchBtn" onclick="doSearch()">Search</button>
@@ -669,6 +677,7 @@
   // ── Generate post ─────────────────────────────────────────────────────────
   async function doGenerate() {
     const slot = document.getElementById('slotSelect').value;
+    const audience = document.getElementById('audienceSelect').value;
     setStatus('Generating post — this can take 30–60 seconds…', 'busy');
     disableControls(true);
     showSpinner(true);
@@ -676,6 +685,7 @@
 
     const body = {
       slot,
+      audience,
       topic_title: selectedTopicTitle || null,
       search_query: activeSearchQuery || null,
     };
@@ -690,7 +700,7 @@
       if (res.status === 401) { handle401(); return; }
       if (!res.ok) throw new Error(await extractError(res));
       const data = await res.json();
-      renderPreview(data, slot);
+      renderPreview(data, slot, audience);
       setStatus(`Post generated: "${data.topic}"`, 'ok');
     } catch (e) {
       setStatus(`Error: ${e.message}`, 'err');
@@ -701,7 +711,7 @@
   }
 
   // ── Render preview ────────────────────────────────────────────────────────
-  function renderPreview(data, slot) {
+  function renderPreview(data, slot, audience) {
     document.getElementById('previewEmpty').style.display = 'none';
     document.getElementById('previewContent').style.display = 'block';
 
@@ -721,7 +731,13 @@
       visual_showcase: 'Visual Showcase',
       evening_blog: 'Evening Blog',
     };
-    document.getElementById('previewSlotBadge').textContent = slotLabels[slot] || slot;
+    const audienceLabels = {
+      tech_practitioners: 'Tech Practitioners',
+      enterprise_leaders: 'Enterprise Leaders',
+    };
+    const slotLabel = slotLabels[slot] || slot;
+    const audLabel = audienceLabels[audience] || audience;
+    document.getElementById('previewSlotBadge').textContent = `${slotLabel} · ${audLabel}`;
   }
 
   function hidePreview() {

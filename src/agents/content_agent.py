@@ -20,6 +20,11 @@ class PostSlot(str, Enum):
     EVENING_BLOG = "evening_blog"          # 22:00 – long-form blog wrap-up
 
 
+class Audience(str, Enum):
+    TECH_PRACTITIONERS = "tech_practitioners"   # senior devs, CTOs, engineers
+    ENTERPRISE_LEADERS = "enterprise_leaders"   # C-suite, VPs, enterprise decision-makers
+
+
 SLOT_INSTRUCTIONS: dict[PostSlot, str] = {
     PostSlot.MORNING_BRIEF: (
         "Create a SHORT morning brief post (energetic, 2-3 punchy sentences). "
@@ -124,16 +129,30 @@ class GeneratedPost:
         return f"{self.linkedin_content}\n\n{self.tag_string}"
 
 
-class ContentAgent:
-    """Uses Claude to generate social posts tailored to each daily time slot."""
-
-    SYSTEM_PROMPT = (
+AUDIENCE_SYSTEM_PROMPTS: dict[Audience, str] = {
+    Audience.TECH_PRACTITIONERS: (
         "You are an expert technical content strategist and software engineer. "
         "Your audience is senior developers, CTOs, and tech enthusiasts. "
         "Every post must be technically accurate, engaging, and provide genuine value. "
         "Prioritise depth over buzzwords. Always ground content in real, practical use cases. "
         "Use clear, confident language — no filler phrases like 'In today's fast-paced world'."
-    )
+    ),
+    Audience.ENTERPRISE_LEADERS: (
+        "You are a strategic technology advisor writing for enterprise decision-makers: "
+        "CEOs, CFOs, COOs, VPs, and board-level executives. "
+        "Frame every post around business outcomes — ROI, competitive advantage, risk mitigation, "
+        "operational efficiency, and digital transformation. "
+        "Translate technical trends into strategic implications: what does this mean for the "
+        "business, the market, and the bottom line? "
+        "Avoid deep implementation details and code. Use concise, authoritative language "
+        "with clear takeaways. Lead with the business impact, not the technology. "
+        "No filler phrases. No hype. Executives value brevity and specificity."
+    ),
+}
+
+
+class ContentAgent:
+    """Uses Claude to generate social posts tailored to each daily time slot."""
 
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
@@ -144,8 +163,9 @@ class ContentAgent:
         trend_report: TrendReport,
         slot: PostSlot,
         selected_topic: str | None = None,
+        audience: Audience = Audience.TECH_PRACTITIONERS,
     ) -> GeneratedPost:
-        logger.info(f"Generating content for slot: {slot.value}")
+        logger.info(f"Generating content for slot: {slot.value}, audience: {audience.value}")
 
         topic_instruction = (
             f"Focus specifically on this topic: {selected_topic}"
@@ -153,12 +173,22 @@ class ContentAgent:
             else "Choose the single most compelling trend above and generate the post."
         )
 
+        audience_note = (
+            "\n\nAudience reminder: write for enterprise leaders (C-suite, VPs). "
+            "Lead with business value and strategic impact. Minimise technical jargon."
+            if audience == Audience.ENTERPRISE_LEADERS
+            else ""
+        )
+
         user_message = (
             f"Focus area: {self.settings.tech_focus}\n\n"
             f"{trend_report.as_text()}\n\n"
             f"Time slot instructions: {SLOT_INSTRUCTIONS[slot]}\n\n"
             f"{topic_instruction}"
+            f"{audience_note}"
         )
+
+        system_prompt = AUDIENCE_SYSTEM_PROMPTS[audience]
 
         response = self.client.messages.create(
             model=self.settings.claude_model,
@@ -166,7 +196,7 @@ class ContentAgent:
             system=[
                 {
                     "type": "text",
-                    "text": self.SYSTEM_PROMPT,
+                    "text": system_prompt,
                     "cache_control": {"type": "ephemeral"},  # prompt caching
                 }
             ],

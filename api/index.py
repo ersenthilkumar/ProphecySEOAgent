@@ -29,7 +29,7 @@ _security = HTTPBearer()
 
 from src.config.settings import Settings
 from src.agents.trend_agent import TrendAgent
-from src.agents.content_agent import ContentAgent, GeneratedPost, PostSlot
+from src.agents.content_agent import Audience, ContentAgent, GeneratedPost, PostSlot
 from src.social.linkedin import LinkedInPlatform
 
 app = FastAPI(title="Social Media Agent API")
@@ -92,6 +92,7 @@ class GenerateRequest(BaseModel):
     slot: str
     topic_title: str | None = None
     search_query: str | None = None
+    audience: str = "tech_practitioners"
 
 
 class PublishRequest(BaseModel):
@@ -185,11 +186,18 @@ def generate_post(req: GenerateRequest, user: str = Depends(_verify_token)):
         raise HTTPException(status_code=502, detail=f"Trend fetch failed: {exc}")
 
     try:
+        audience = Audience(req.audience) if req.audience else Audience.TECH_PRACTITIONERS
+    except ValueError:
+        raise HTTPException(status_code=400, detail=f"Unknown audience: {req.audience!r}. "
+                            f"Valid values: {[a.value for a in Audience]}")
+
+    try:
         content_agent = ContentAgent(settings)
         post = content_agent.generate(
             trend_report=report,
             slot=slot,
             selected_topic=req.topic_title or None,
+            audience=audience,
         )
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"Content generation failed: {exc}")
